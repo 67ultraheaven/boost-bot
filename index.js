@@ -1,14 +1,9 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder } = require('discord.js');
-const http = require('http');
-
-const PORT = process.env.PORT || 3000;
-
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Bot is running');
-}).listen(PORT, () => {
-  console.log(`Health server listening on port ${PORT}`);
-});
+const {
+  Client,
+  GatewayIntentBits,
+  SlashCommandBuilder,
+  PermissionFlagsBits
+} = require('discord.js');
 
 const client = new Client({
   intents: [
@@ -49,9 +44,9 @@ async function syncBoosters() {
       if (!targetMember) continue;
 
       if (!targetMember.roles.cache.has(REWARD_ROLE_ID)) {
-        await targetMember.roles.add(REWARD_ROLE_ID);
-        added++;
+        await targetMember.roles.add(REWARD_ROLE_ID).catch(console.error);
         console.log(`Synced role to ${targetMember.user.tag}`);
+        added++;
       }
     }
 
@@ -60,9 +55,9 @@ async function syncBoosters() {
       const isBoosting = sourceMember?.roles.cache.has(BOOSTER_ROLE_ID);
 
       if (!isBoosting) {
-        await targetMember.roles.remove(REWARD_ROLE_ID);
-        removed++;
+        await targetMember.roles.remove(REWARD_ROLE_ID).catch(console.error);
         console.log(`Removed synced role from ${targetMember.user.tag}`);
+        removed++;
       }
     }
 
@@ -80,7 +75,8 @@ client.once('clientReady', async () => {
   try {
     const command = new SlashCommandBuilder()
       .setName('syncboosters')
-      .setDescription('Sync booster roles from Server 2 to Server 1');
+      .setDescription('Sync booster roles from Server 2 to Server 1')
+      .setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
     const guild1 = await client.guilds.fetch(SERVER1_ID);
     await guild1.commands.create(command);
@@ -108,12 +104,12 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
     }
 
     if (!hadBoost && hasBoost) {
-      await targetMember.roles.add(REWARD_ROLE_ID);
+      await targetMember.roles.add(REWARD_ROLE_ID).catch(console.error);
       console.log(`Gave role to ${newMember.user.tag}`);
     }
 
     if (hadBoost && !hasBoost) {
-      await targetMember.roles.remove(REWARD_ROLE_ID);
+      await targetMember.roles.remove(REWARD_ROLE_ID).catch(console.error);
       console.log(`Removed role from ${newMember.user.tag}`);
     }
   } catch (err) {
@@ -124,6 +120,14 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== 'syncboosters') return;
+
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+    await interaction.reply({
+      content: 'You do not have permission to use this command.',
+      ephemeral: true
+    });
+    return;
+  }
 
   await interaction.reply({
     content: 'Syncing boosters now...',
